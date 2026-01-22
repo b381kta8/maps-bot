@@ -1,3 +1,13 @@
+import os
+import subprocess
+
+# Sunucuda tarayıcı motorunun yüklü olduğundan emin olalım
+try:
+    import playwright
+except ImportError:
+    subprocess.run(["pip", "install", "playwright"])
+    subprocess.run(["playwright", "install", "chromium"])
+    
 from playwright.sync_api import sync_playwright
 import time
 import re
@@ -108,4 +118,5 @@ def run():
         browser.close()
 
 if __name__ == "__main__":
+
     run()

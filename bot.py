@@ -1,4 +1,16 @@
 import os
+import subprocess
+import sys
+
+# Sunucuda Playwright ve Chromium yoksa zorla kurar
+try:
+    import playwright
+except ImportError:
+    subprocess.run([sys.executable, "-m", "pip", "install", "playwright"])
+    subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"])
+
+from playwright.sync_api import sync_playwright
+# ... geri kalan kodların ...import os
 # Sunucuda tarayıcı motorunu kurmak için kritik komut
 os.system("playwright install chromium")
 
@@ -68,3 +80,4 @@ def run():
 
 if __name__ == "__main__":
     run()
+

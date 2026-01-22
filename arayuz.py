@@ -9,7 +9,7 @@ def check_password():
         st.title("🔒 Giriş Yapın")
         pwd = st.text_input("Şifreyi Giriniz:", type="password")
         if st.button("Giriş"):
-            if pwd == "ozel_sifrem_123": # Burayı istediğin şifreyle değiştir
+            if pwd == "üç": # Burayı istediğin şifreyle değiştir
                 st.session_state.password_correct = True
                 st.rerun()
             else:
@@ -71,4 +71,5 @@ with col2:
     if os.path.exists("firmalar_sonuc.csv"):
         df = pd.read_csv("firmalar_sonuc.csv", sep=';')
         st.dataframe(df)
+
         st.download_button("📥 Excel İndir", open("firmalar_sonuc.csv", "rb"), "liste.csv")

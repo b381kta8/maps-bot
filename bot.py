@@ -1,3 +1,9 @@
+import os
+import subprocess
+
+# Sunucuda playwright eksikse kurmaya zorlar
+os.system("playwright install chromium")
+
 from playwright.sync_api import sync_playwright
 import time
 import re
@@ -78,3 +84,4 @@ def run():
 
 if __name__ == "__main__":
     run()
+

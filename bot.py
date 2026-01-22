@@ -1,4 +1,6 @@
 import os
+os.system("playwright install chromium")
+import os
 # Sunucuda tarayıcı kurulumunu tetiklemek için kritik satır
 os.system("playwright install chromium")
 
@@ -91,5 +93,6 @@ def run():
 
 if __name__ == "__main__":
     run()
+
 
 

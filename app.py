@@ -4,11 +4,10 @@ import sys
 import os
 import subprocess
 
-# --- BROWSER SETUP (CLOUD) ---
+# --- BROWSER KURULUMU (CLOUD) ---
 def install_playwright_browser():
     try:
         subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"], check=True)
-        print("Browser installed.")
     except Exception as e:
         print(f"Install error: {e}")
 
@@ -17,7 +16,7 @@ if "browser_installed" not in st.session_state:
         install_playwright_browser()
         st.session_state["browser_installed"] = True
 
-# --- LOGIN ---
+# --- GÜVENLİK ---
 if 'authenticated' not in st.session_state: st.session_state['authenticated'] = False
 if not st.session_state['authenticated']:
     st.set_page_config(page_title="Giriş", layout="centered")
@@ -27,10 +26,10 @@ if not st.session_state['authenticated']:
         if pwd == "üç":
             st.session_state['authenticated'] = True
             st.rerun()
-        else: st.error("Yanlış şifre")
+        else: st.error("Hatalı şifre")
     st.stop()
 
-# --- WINDOWS FIX ---
+# --- WINDOWS AYARI ---
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
@@ -46,7 +45,7 @@ BLOCKED_DOMAINS = ["facebook.com", "instagram.com", "twitter.com", "linkedin.com
 if 'results' not in st.session_state: st.session_state['results'] = []
 if 'processed_urls' not in st.session_state: st.session_state['processed_urls'] = set()
 
-# --- FONKSIYONLAR ---
+# --- YARDIMCI FONKSİYONLAR ---
 def verify_domain_mx(email):
     try:
         dns.resolver.resolve(email.split('@')[1], 'MX')
@@ -77,26 +76,24 @@ def convert_df(df):
     return output.getvalue()
 
 # --- ARAYÜZ ---
-st.set_page_config(page_title="Google Maps Scraper Pro", layout="wide")
+st.set_page_config(page_title="Google Maps Scraper Ultimate", layout="wide")
 
 st.markdown("""
 <div style="position: fixed; top: 65px; right: 20px; z-index: 99999; background: rgba(255, 255, 255, 0.25); backdrop-filter: blur(10px); padding: 8px 16px; border-radius: 20px; border: 1px solid rgba(255, 255, 255, 0.4); font-size: 12px; font-weight: 600; color: #333; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
     🚀 Made by ÜÇ & AI
 </div>""", unsafe_allow_html=True)
 
-st.title("☁️ Google Maps Scraper (Gelişmiş Mod)")
+st.title("☁️ Google Maps Scraper (Katı Filtre Modu)")
+st.caption("Sadece e-postası olanlar. Mükerrer yok. Liste sonuna kadar tarama.")
 
 with st.sidebar:
     st.header("Parametreler")
     city = st.text_input("İl", "İstanbul")
     district = st.text_input("İlçe", "Kadıköy")
     keyword = st.text_input("Sektör", "Giyim Mağazası")
-    max_target = st.number_input("Hedef Firma Sayısı", 1, 1000, 50)
+    max_target = st.number_input("Hedef Mail Sayısı", 1, 1000, 20)
     
-    st.divider()
-    # YENİ ÖZELLİK: ESNEK KAYIT
-    save_without_mail = st.checkbox("E-postası olmayanları da kaydet (Telefon için)", value=True)
-    st.caption("İşaretlerseniz, mail bulunamasa bile firma listeye eklenir. Böylece listeniz çok daha hızlı dolar.")
+    st.info(f"💡 {max_target} temiz mail bulmak için bot yaklaşık {max_target * 40} işletmeyi tarayacaktır. Lütfen sabırlı olun.")
     
     st.divider()
     if st.button("Başlat", type="primary"):
@@ -116,7 +113,8 @@ with col1:
     status_text = st.empty()
     progress_bar = st.progress(0)
     st.divider()
-    stat_total = st.metric("✅ Toplam Kayıt", len(st.session_state['results']))
+    stat_candidates = st.metric("Toplanan Aday", 0)
+    stat_emails = st.metric("✅ Kaydedilen Mail", len(st.session_state['results']))
 
 with col2:
     result_table = st.empty()
@@ -125,7 +123,7 @@ with col2:
 
 # --- ENGINE ---
 if st.session_state.get('start_scraping', False):
-    status_text.info("Başlatılıyor...")
+    status_text.info("Bot başlatılıyor...")
     
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
@@ -133,7 +131,7 @@ if st.session_state.get('start_scraping', False):
         page = context.new_page()
 
         try:
-            # ARAMA
+            # 1. HARİTA ARAMASI
             search_term = f"{city} {district} {keyword}"
             page.goto("https://www.google.com/maps?hl=tr", timeout=60000)
             try: page.get_by_role("button", name="Tümünü kabul et").click(timeout=3000)
@@ -148,41 +146,55 @@ if st.session_state.get('start_scraping', False):
             
             page.wait_for_selector('div[role="feed"]', timeout=30000)
             
-            # AGRESİF SCROLL (Daha fazla aday toplamak için)
+            # 2. DEVASA HAVUZ TOPLAMA (ULTRA AGRESİF SCROLL)
             listings = []
             prev_cnt = 0
             fails = 0
-            # E-posta bulma oranı %10 ise, 100 hedef için 1000 aday gerekir.
-            # Hedefin 20 katı kadar aday toplamaya çalışalım.
-            target_pool = max_target * 20 
             
-            status_text.warning(f"Havuz dolduruluyor... Hedef havuz: {target_pool} aday")
+            # Formül: 1 mail bulmak için ortalama 40-50 işletme gezmek gerekir.
+            # Hedefin 50 katı kadar aday toplayalım ki garanti olsun.
+            target_pool = max_target * 50 
+            
+            status_text.warning(f"Derin tarama yapılıyor... Hedef havuz: {target_pool} aday (Bu işlem uzun sürebilir)")
             
             while len(listings) < target_pool:
                 if not st.session_state.get('start_scraping', False): break
                 
+                # Mouse Scroll
                 page.hover('div[role="feed"]')
-                page.mouse.wheel(0, 5000)
-                time.sleep(1.5)
+                page.mouse.wheel(0, 10000) # Daha sert scroll
+                time.sleep(1)
                 
-                # Bazen yukarı aşağı yapmak yüklemeyi tetikler
-                if len(listings) % 50 == 0:
-                    page.mouse.wheel(0, -1000)
-                    time.sleep(0.5)
-                    page.mouse.wheel(0, 5000)
+                # Klavye "End" tuşu (Google Maps'i tetikler)
+                page.keyboard.press("End")
+                time.sleep(1)
 
                 listings = page.locator('div[role="article"]').all()
-                status_text.text(f"Havuz: {len(listings)} işletme")
+                count = len(listings)
+                stat_candidates.metric("Toplanan Aday", count)
                 
-                if len(listings) == prev_cnt:
+                if count == prev_cnt:
                     fails += 1
-                    if fails > 8: break # 8 deneme boyunca artmazsa son
-                else: fails = 0
-                prev_cnt = len(listings)
+                    status_text.text(f"Liste yükleniyor... ({fails}/15)")
+                    
+                    # Eğer takıldıysa yukarı aşağı yapıp "salla"
+                    if fails > 5:
+                        page.mouse.wheel(0, -1000)
+                        time.sleep(0.5)
+                        page.mouse.wheel(0, 5000)
+                    
+                    # 15 deneme boyunca sayı artmazsa, harita bitmiş demektir.
+                    if fails > 15: 
+                        status_text.info("Haritadaki tüm işletmeler yüklendi.")
+                        break
+                else: 
+                    fails = 0
+                
+                prev_cnt = count
 
-            status_text.success(f"{len(listings)} aday bulundu. Analiz başlıyor...")
+            status_text.success(f"{len(listings)} aday bulundu. Mail avı başlıyor...")
             
-            # ANALİZ
+            # 3. ANALİZ VE FİLTRELEME
             for listing in listings:
                 if len(st.session_state['results']) >= max_target:
                     st.success("Hedefe ulaşıldı!"); st.session_state['start_scraping'] = False; break
@@ -208,55 +220,54 @@ if st.session_state.get('start_scraping', False):
                         if pb.count() > 0: phone = pb.get_attribute("aria-label").replace("Telefon: ", "")
                     except: pass
                     
-                    # Mükerrer Kontrol
-                    clean_url = website.rstrip("/") if website else name
+                    # FİLTRE: Web sitesi yoksa direkt atla (Vakit kaybetme)
+                    if not website: continue
+                    
+                    # FİLTRE: Mükerrer Site Kontrol
+                    clean_url = website.rstrip("/")
                     if clean_url in st.session_state['processed_urls']: continue
                     st.session_state['processed_urls'].add(clean_url)
                     
-                    if website and any(b in website for b in BLOCKED_DOMAINS): continue
+                    # FİLTRE: Yasaklı Domainler
+                    if any(b in website for b in BLOCKED_DOMAINS): continue
 
-                    status_text.text(f"İnceleniyor: {name}")
+                    status_text.text(f"Taranıyor: {name}")
                     
+                    # SİTEYE GİRİŞ
+                    sp = context.new_page()
                     email = None
-                    method = "-"
                     
-                    # WEB SİTESİ VARSA MAİL ARA
-                    if website:
-                        sp = context.new_page()
-                        try:
-                            sp.goto(website, timeout=12000)
-                            emails = extract_emails_from_page(sp)
-                            
-                            if not emails:
-                                # İletişim sayfalarına bak
-                                for cl in sp.locator("a[href*='iletisim'], a[href*='contact']").all():
-                                    lnk = cl.get_attribute("href")
-                                    if lnk:
-                                        if not lnk.startswith("http"): lnk = website.rstrip("/") + "/" + lnk.lstrip("/")
-                                        sp.goto(lnk, timeout=8000)
-                                        emails = extract_emails_from_page(sp)
-                                        if emails: break
-                            
-                            if emails:
-                                for em in emails:
-                                    if em not in [r['E-posta'] for r in st.session_state['results']]:
-                                        if verify_domain_mx(em):
-                                            email = em; method = "Web Sitesi"; break
-                        except: pass
-                        finally: sp.close()
+                    try:
+                        for attempt in range(2): 
+                            try:
+                                sp.goto(website, timeout=12000)
+                                break
+                            except: time.sleep(1)
+                        
+                        emails = extract_emails_from_page(sp)
+                        if not emails:
+                            for cl in sp.locator("a[href*='iletisim'], a[href*='contact'], a[href*='hakkimizda']").all():
+                                lnk = cl.get_attribute("href")
+                                if lnk:
+                                    if not lnk.startswith("http"): lnk = website.rstrip("/") + "/" + lnk.lstrip("/")
+                                    sp.goto(lnk, timeout=8000)
+                                    emails = extract_emails_from_page(sp)
+                                    if emails: break
+                        
+                        if emails:
+                            for em in emails:
+                                # FİLTRE: Bu mail listede var mı?
+                                if em in [r['E-posta'] for r in st.session_state['results']]: continue
+                                
+                                # FİLTRE: Mail çalışıyor mu?
+                                if verify_domain_mx(em):
+                                    email = em
+                                    break
+                    except: pass
+                    finally: sp.close()
                     
-                    # KAYIT KARARI
-                    should_save = False
-                    
+                    # SADECE MAIL VARSA KAYDET
                     if email:
-                        should_save = True
-                    elif save_without_mail: 
-                        # Mail yok ama kullanıcı "Hepsini kaydet" dediyse
-                        should_save = True
-                        email = "-" # Mail yoksa tire koy
-                        method = "Sadece Telefon"
-
-                    if should_save:
                         st.session_state['results'].append({
                             "Firma İsmi": name,
                             "İl": city,
@@ -264,10 +275,10 @@ if st.session_state.get('start_scraping', False):
                             "Telefon": phone,
                             "Web Sitesi": website,
                             "E-posta": email,
-                            "Yöntem": method
+                            "Yöntem": "Web"
                         })
                         result_table.dataframe(pd.DataFrame(st.session_state['results']), use_container_width=True)
-                        stat_total.metric("✅ Toplam Kayıt", len(st.session_state['results']))
+                        stat_emails.metric("✅ Kaydedilen Mail", len(st.session_state['results']))
 
                 except: continue
 
